@@ -19,49 +19,28 @@ StringBuilder dialogSoFar = new();
 
 var creds = new DefaultAzureCredential(includeInteractiveCredentials: true);
 
-var userKernel = Kernel.CreateBuilder()
+var kernel = Kernel.CreateBuilder()
     .AddAzureOpenAIChatCompletion(deployment, endpoint, creds)
     .Build();
-
-var botKernel = Kernel.CreateBuilder()
-    .AddAzureOpenAIChatCompletion(deployment, endpoint, creds)
-    .Build();
+kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "user"));
+kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "bot"));
 
 Console.WriteLine("Generating first question (you may be prompted for login)...");
 Console.WriteLine(string.Empty);
 try
 {
-    var promptToUser = userKernel.InvokePromptStreamingAsync("You are a user who is chatting to a representative at Global Bank, where you are a customer. You may request information on your accounts, ask for financial advice, and inquire about credit card offers. Your questions should be short and to the point, as this is simply a chat message interface. Make up your own name and create an initial question to the representative that makes sense for them to answer.", cancellationToken: ct);
+    var promptToUser = kernel.InvokeStreamingAsync(kernel.Plugins["user"]["initial"], cancellationToken: ct);
 
     var userQuestion = await AppendHistoryAsync("User", promptToUser);
     bool firstQuestion = true;
 
-    // Your code here
     do
     {
-        var botResponse = botKernel.InvokePromptStreamingAsync(firstQuestion ? $@"You are the representative for Global Bank, in a chat with a current customer of the bank. Your job it is to answer questions from the user about their accounts and transactions, as well as provide them financial advice and explain the bank's current product offerings (i.e. credit cards, loans, etc.). You should make up numbers to answer questions about balances, fees, etc. ensuring they are plausible for the question asked by the user.
-
-Make up your own name, and answer this first question a user has asked you: ""{userQuestion}""
-
-Answer their question in a friendly manner but be short and to the point, as this is simply a chat message interface. Keep the conversation going until the user tells you all their concerns have been resolved." :
-$@"You are the representative for Global Bank, in a chat with a current customer of the bank. Your job it is to answer questions from the user about their accounts and transactions, as well as provide them financial advice and explain the bank's current product offerings (i.e. credit cards, loans, etc.). You should make up numbers to answer questions about balances, fees, etc. ensuring they are plausible for the question asked by the user. The conversation with this user so far has gone like this (you are 'Bank Representative' and the user is 'User'):
-
----
-{dialogSoFar}
----
-
-Now the user asks: ""{userQuestion}""
-
-Answer their question in a friendly manner but be short and to the point, as this is simply a chat message interface. Keep the conversation going until the user tells you all their concerns have been resolved. Don't include any persona prefixes in your responses.", cancellationToken: ct);
+        var botResponse = kernel.InvokeStreamingAsync("bot", firstQuestion ? "first" : "followup", new() { ["userQuestion"] = userQuestion, ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
 
         await AppendHistoryAsync("Bank Representative", botResponse);
 
-        promptToUser = userKernel.InvokePromptStreamingAsync($@"You are a user who is chatting to a representative at Global Bank, where you are a customer. You may request information on your accounts, ask for financial advice, and inquire about credit card offers. Your questions should be short and to the point, as this is simply a chat message interface. The dialog between you and the bank representative so far has gone like this (you are 'User' and the representative is 'Bank Representative'):
----
-{dialogSoFar}
----
-
-What would you like to ask next? Don't include any persona prefixes in your question.", cancellationToken: ct);
+        promptToUser = kernel.InvokeStreamingAsync("user", "followup", new() { ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
         userQuestion = await AppendHistoryAsync("User", promptToUser);
 
         firstQuestion = false;

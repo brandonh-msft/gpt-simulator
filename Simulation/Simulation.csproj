@@ -8,8 +8,48 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="sk\bot\first\config.json" />
+	  <None Remove="sk\bot\first\skprompt.txt" />
+	  <None Remove="sk\bot\followup\config.json" />
+	  <None Remove="sk\bot\followup\skprompt.txt" />
+	  <None Remove="sk\user\followup\config.json" />
+	  <None Remove="sk\user\followup\skprompt.txt" />
+	  <None Remove="sk\user\initial\config.json" />
+	  <None Remove="sk\user\initial\skprompt.txt" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="sk\bot\first\config.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\bot\first\skprompt.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\bot\followup\config.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\bot\followup\skprompt.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\user\followup\config.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\user\followup\skprompt.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\user\initial\config.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\user\initial\skprompt.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Azure.Identity" Version="1.10.4" />
 		<PackageReference Include="Microsoft.SemanticKernel" Version="1.5.0" />
 	</ItemGroup>
+
+	<ProjectExtensions><VisualStudio><UserProperties /></VisualStudio></ProjectExtensions>
 
 </Project>
