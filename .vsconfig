@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "components": [],
+  "extensions": [
+    "https://marketplace.visualstudio.com/items?itemName=bc3tech.net-bc3tech-docgpt"
+  ]
+}
