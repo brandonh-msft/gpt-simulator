@@ -1,8 +1,9 @@
 ﻿using System.Text;
 
-using Azure.Identity;
+using LangChain.Chains.HelperChains;
+using LangChain.Providers.Azure;
 
-using Microsoft.SemanticKernel;
+using static LangChain.Chains.Chain;
 
 string endpoint = args[0], deployment = args[1];
 
@@ -17,30 +18,47 @@ Console.CancelKeyPress += (sender, e) =>
 
 StringBuilder dialogSoFar = new();
 
-var creds = new DefaultAzureCredential(includeInteractiveCredentials: true);
+var provider = new AzureOpenAiProvider(Environment.GetEnvironmentVariable("OPENAI_API_KEY")!, endpoint);
+var model = new AzureOpenAiChatModel(provider, deployment);
 
-var kernel = Kernel.CreateBuilder()
-    .AddAzureOpenAIChatCompletion(deployment, endpoint, creds)
-    .Build();
-kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "user"));
-kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "bot"));
+static string MakeInitialBotPrompt(string userQuestion) => $@"You are the representative for Global Bank, in a chat with a current customer of the bank. Your job it is to answer questions from the user about their accounts and transactions, as well as provide them financial advice and explain the bank's current product offerings (i.e. credit cards, loans, etc.). You should make up numbers to answer questions about balances, fees, etc. ensuring they are plausible for the question asked by the user.
 
-Console.WriteLine("Generating first question (you may be prompted for login)...");
-Console.WriteLine(string.Empty);
+Make up your own name, and answer this first question a user has asked you: ""{userQuestion}""
+
+Answer their question in a friendly manner but be short and to the point, as this is simply a chat message interface. Keep the conversation going until the user tells you all their concerns have been resolved.";
+
+const string InitialUserPrompt = @"You are a user who is chatting to a representative at Global Bank, where you are a customer. You may request information on your accounts, ask for financial advice, and inquire about credit card offers. Your questions should be short and to the point, as this is simply a chat message interface. Make up your own name and create an initial question to the representative that makes sense for them to answer.";
+
+static string MakeFollowOnBotPrompt(string userQuestion, string dialogSoFar) => $@"You are the representative for Global Bank, in a chat with a current customer of the bank. Your job it is to answer questions from the user about their accounts and transactions, as well as provide them financial advice and explain the bank's current product offerings (i.e. credit cards, loans, etc.). You should make up numbers to answer questions about balances, fees, etc. ensuring they are plausible for the question asked by the user. The conversation with this user so far has gone like this (you are 'Bank Representative' and the user is 'User'):
+
+---
+{dialogSoFar}
+---
+
+Now the user asks: ""{userQuestion}""
+
+Answer their question in a friendly manner but be short and to the point, as this is simply a chat message interface. Keep the conversation going until the user tells you all their concerns have been resolved. Don't include any persona prefixes in your responses.";
+
+static string MakeFollowOnUserPrompt(string dialogSoFar) => $@"You are a user who is chatting to a representative at Global Bank, where you are a customer. You may request information on your accounts, ask for financial advice, and inquire about credit card offers. Your questions should be short and to the point, as this is simply a chat message interface. The dialog between you and the bank representative so far has gone like this (you are 'User' and the representative is 'Bank Representative'):
+---
+{dialogSoFar}
+---
+
+What would you like to ask next? Don't include any persona prefixes in your question.";
+
 try
 {
-    var promptToUser = kernel.InvokeStreamingAsync(kernel.Plugins["user"]["initial"], cancellationToken: ct);
+    var promptToUser = Set(InitialUserPrompt) | LLM(model);
 
     var userQuestion = await AppendHistoryAsync("User", promptToUser);
     bool firstQuestion = true;
 
     do
     {
-        var botResponse = kernel.InvokeStreamingAsync("bot", firstQuestion ? "first" : "followup", new() { ["userQuestion"] = userQuestion, ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
-
+        var botResponse = Set(firstQuestion ? MakeInitialBotPrompt(userQuestion) : MakeFollowOnBotPrompt(userQuestion, dialogSoFar.ToString())) | LLM(model);
         await AppendHistoryAsync("Bank Representative", botResponse);
 
-        promptToUser = kernel.InvokeStreamingAsync("user", "followup", new() { ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
+        promptToUser = Set(MakeFollowOnUserPrompt(dialogSoFar.ToString())) | LLM(model);
         userQuestion = await AppendHistoryAsync("User", promptToUser);
 
         firstQuestion = false;
@@ -51,27 +69,15 @@ catch (Exception e) when (e is OperationCanceledException or TaskCanceledExcepti
     Console.WriteLine("Exiting...");
 }
 
-async Task<string> AppendHistoryAsync(string speaker, IAsyncEnumerable<StreamingKernelContent> stream)
+async Task<string> AppendHistoryAsync(string speaker, StackChain stream)
 {
-    StringBuilder fullResponse = new();
-    Console.Write($"{speaker}: ");
-    await foreach (var s in stream)
-    {
-        if (s is null)
-        {
-            continue;
-        }
+    var fullResponse = await stream.Run();
 
-        var token = s.ToString();
-        Console.Write(token);
-        fullResponse.Append(token);
-    }
-
-    string line = $"{speaker}: {fullResponse}";
+    string line = $"{speaker}: {fullResponse.Value["text"]}";
+    Console.WriteLine(line);
     dialogSoFar.AppendLine(line);
 
     Console.WriteLine();
-    Console.WriteLine();
 
-    return fullResponse.ToString();
+    return fullResponse.Value["text"].ToString()!;
 }
