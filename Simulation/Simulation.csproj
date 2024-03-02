@@ -8,6 +8,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <None Remove="sk\proctor\grade\config.json" />
+	  <None Remove="sk\proctor\grade\skprompt.txt" />
 	  <None Remove="sk\bot\first\config.json" />
 	  <None Remove="sk\bot\first\skprompt.txt" />
 	  <None Remove="sk\bot\followup\config.json" />
@@ -19,6 +21,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Content Include="sk\proctor\grade\config.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="sk\proctor\grade\skprompt.txt">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	  <Content Include="sk\bot\first\config.json">
 	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	  </Content>

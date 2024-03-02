@@ -24,24 +24,27 @@ var kernel = Kernel.CreateBuilder()
     .Build();
 kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "user"));
 kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "bot"));
+kernel.ImportPluginFromPromptDirectory(Path.Combine(Environment.CurrentDirectory, "sk", "proctor"));
 
 Console.WriteLine("Generating first question (you may be prompted for login)...");
 Console.WriteLine(string.Empty);
 try
 {
-    var promptToUser = kernel.InvokeStreamingAsync(kernel.Plugins["user"]["initial"], cancellationToken: ct);
+    var streamingResponse = kernel.InvokeStreamingAsync(kernel.Plugins["user"]["initial"], cancellationToken: ct);
 
-    var userQuestion = await AppendHistoryAsync("User", promptToUser);
+    var userQuestion = await AppendHistoryAsync("User", streamingResponse);
     bool firstQuestion = true;
 
     do
     {
-        var botResponse = kernel.InvokeStreamingAsync("bot", firstQuestion ? "first" : "followup", new() { ["userQuestion"] = userQuestion, ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
+        streamingResponse = kernel.InvokeStreamingAsync("bot", firstQuestion ? "first" : "followup", new() { ["userQuestion"] = userQuestion, ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
 
-        await AppendHistoryAsync("Bank Representative", botResponse);
+        var botResponse = await AppendHistoryAsync("Bank Representative", streamingResponse);
 
-        promptToUser = kernel.InvokeStreamingAsync("user", "followup", new() { ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
-        userQuestion = await AppendHistoryAsync("User", promptToUser);
+        await GradeResponseAsync(kernel, userQuestion, botResponse);
+
+        streamingResponse = kernel.InvokeStreamingAsync("user", "followup", new() { ["dialogSoFar"] = dialogSoFar }, cancellationToken: ct);
+        userQuestion = await AppendHistoryAsync("User", streamingResponse);
 
         firstQuestion = false;
     } while (!cts.IsCancellationRequested);
@@ -49,6 +52,13 @@ try
 catch (Exception e) when (e is OperationCanceledException or TaskCanceledException)
 {
     Console.WriteLine("Exiting...");
+}
+
+async Task GradeResponseAsync(Kernel kernel, string userQuestion, string botResponseToGrade)
+{
+    var grade = await kernel.InvokeAsync("proctor", "grade", new() { ["userQuestion"] = userQuestion, ["botResponse"] = botResponseToGrade }, cancellationToken: ct);
+    Console.WriteLine("Grade: " + grade.GetValue<string>());
+    Console.WriteLine();
 }
 
 async Task<string> AppendHistoryAsync(string speaker, IAsyncEnumerable<StreamingKernelContent> stream)
